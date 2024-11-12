@@ -3,6 +3,7 @@ package com.example.recipefinder
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,13 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,13 +46,39 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            RecipeSearch()
+            var ingredients by remember { mutableStateOf<List<String>>(emptyList()) }
+
+            LaunchedEffect(Unit) {
+                fetchAllIngredients { result ->
+                    ingredients = result ?: emptyList()
+                }
+            }
+
+            RecipeSearch(ingredients = ingredients)
         }
+    }
+
+    private fun fetchAllIngredients(onResult: (List<String>?) -> Unit) {
+        val call = ApiClient.retrofitService.getAllIngredients()
+        call.enqueue(object : Callback<IngredientResponse> {
+            override fun onResponse(call: Call<IngredientResponse>, response: Response<IngredientResponse>) {
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    onResult(body?.meals?.map { it.strIngredient })
+                } else {
+                    onResult(null)
+                }
+            }
+
+            override fun onFailure(call: Call<IngredientResponse>, t: Throwable) {
+                onResult(null)
+            }
+        })
     }
 }
 
 @Composable
-fun RecipeSearch(modifier: Modifier = Modifier) {
+fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = emptyList()) {
     var ingredient by remember { mutableStateOf("") }
     var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -63,27 +90,46 @@ fun RecipeSearch(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Input field for the ingredient
+        // Input field for the ingredient with auto-completion
         OutlinedTextField(
             value = ingredient,
-            onValueChange = { ingredient = it },
+            onValueChange = { newIngredient ->
+                ingredient = newIngredient.trim() // Trim leading/trailing whitespaces
+            },
             label = { Text("Enter an ingredient") },
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Search button
-        Button(onClick = {
-            searchRecipes(ingredient) { result, error ->
-                recipes = result
-                errorMessage = error
+        // Display auto-completion suggestions
+        if (ingredient.isNotEmpty()) {
+            val suggestions = ingredients.filter { it.contains(ingredient, ignoreCase = true) }
+            LazyColumn {
+                items(suggestions) { suggestion ->
+                    Text(
+                        text = suggestion,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                ingredient = suggestion
+                            }
+                            .padding(8.dp)
+                    )
+                }
             }
-        }) {
-            Text("Search Recipes")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Automatically trigger search when input matches one or more suggestions
+        LaunchedEffect(ingredient) {
+            val suggestions = ingredients.filter { it.equals(ingredient, ignoreCase = true) }
+            if (suggestions.isNotEmpty()) {
+                searchRecipes(ingredient) { result, error ->
+                    recipes = result
+                    errorMessage = error
+                }
+            }
+        }
 
         // Display error message if exists
         if (errorMessage != null) {
@@ -112,7 +158,7 @@ fun RecipeCard(recipe: Recipe) {
             .fillMaxWidth()
             .padding(8.dp),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp) // Corrected elevation usage
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier
@@ -130,15 +176,15 @@ fun RecipeCard(recipe: Recipe) {
                 modifier = Modifier
                     .size(80.dp)
                     .padding(end = 16.dp)
-                    .clip(RoundedCornerShape(50)), // Corrected clip modifier
-                contentScale = ContentScale.Crop // Crop image into circle
+                    .clip(RoundedCornerShape(50)),
+                contentScale = ContentScale.Crop
             )
 
             // Display the recipe name
             Column {
                 Text(
                     text = recipe.strMeal,
-                    style = MaterialTheme.typography.bodyLarge, // Corrected typography usage for Material3
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )

@@ -11,6 +11,8 @@ interface RecipeApiService {
     // Update endpoint to filter by ingredient
     @GET("filter.php")
     fun getRecipesByIngredient(@Query("i") ingredient: String): Call<RecipeResponse>
+    @GET("list.php?i=list")
+    fun getAllIngredients(): Call<IngredientResponse>
 }
 
 // Set up the Retrofit instance

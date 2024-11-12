@@ -12,3 +12,11 @@ data class Recipe(
     val strInstructions: String?,
     val strMealThumb: String
 )
+
+data class IngredientResponse(
+    val meals: List<Ingredient>
+)
+
+data class Ingredient(
+    val strIngredient: String
+)
