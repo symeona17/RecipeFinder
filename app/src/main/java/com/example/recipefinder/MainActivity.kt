@@ -7,10 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -42,7 +41,10 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,11 +99,25 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
         OutlinedTextField(
             value = ingredient,
             onValueChange = { newIngredient ->
-                ingredient = newIngredient.copy(text = newIngredient.text.trim()) // Trim leading/trailing whitespaces
+                ingredient = newIngredient.copy(
+                    text = newIngredient.text.trim(),
+                    selection = TextRange(newIngredient.text.length) // Move cursor to the end
+                )
                 recipes = null // Clear previous results
             },
             label = { Text("Enter an ingredient") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                if (ingredient.text.isNotEmpty()) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.close),
+                        contentDescription = "Clear text",
+                        modifier = Modifier.clickable {
+                            ingredient = TextFieldValue("")
+                        }
+                    )
+                }
+            }
         )
 
         // Display auto-completion suggestions
@@ -114,8 +130,11 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                ingredient = TextFieldValue(suggestion)
-                                keyboardController?.hide() // Hide the keyboard
+                                ingredient = TextFieldValue(
+                                    text = suggestion,
+                                    selection = TextRange(suggestion.length, suggestion.length)
+                                )
+                                keyboardController?.hide()
                             }
                             .padding(8.dp)
                     )

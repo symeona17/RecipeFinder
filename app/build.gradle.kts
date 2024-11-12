@@ -64,4 +64,6 @@ dependencies {
     implementation(libs.coil) // Core Coil library for image loading
     implementation(libs.androidx.material3) // For Material3
     implementation(libs.androidx.compose.ui) // Core Compose UI
+    implementation(libs.androidx.compose.ui.text)
+
 }
