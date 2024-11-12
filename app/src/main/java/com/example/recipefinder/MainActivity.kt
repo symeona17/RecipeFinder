@@ -41,6 +41,8 @@ import coil.request.ImageRequest
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.TextFieldValue
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,9 +81,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = emptyList()) {
-    var ingredient by remember { mutableStateOf("") }
+    var ingredient by remember { mutableStateOf(TextFieldValue("")) }
     var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(
         modifier = modifier
@@ -94,15 +97,16 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
         OutlinedTextField(
             value = ingredient,
             onValueChange = { newIngredient ->
-                ingredient = newIngredient.trim() // Trim leading/trailing whitespaces
+                ingredient = newIngredient.copy(text = newIngredient.text.trim()) // Trim leading/trailing whitespaces
+                recipes = null // Clear previous results
             },
             label = { Text("Enter an ingredient") },
             modifier = Modifier.fillMaxWidth()
         )
 
         // Display auto-completion suggestions
-        if (ingredient.isNotEmpty()) {
-            val suggestions = ingredients.filter { it.contains(ingredient, ignoreCase = true) }
+        if (ingredient.text.isNotEmpty()) {
+            val suggestions = ingredients.filter { it.contains(ingredient.text, ignoreCase = true) }
             LazyColumn {
                 items(suggestions) { suggestion ->
                     Text(
@@ -110,7 +114,8 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                ingredient = suggestion
+                                ingredient = TextFieldValue(suggestion)
+                                keyboardController?.hide() // Hide the keyboard
                             }
                             .padding(8.dp)
                     )
@@ -118,13 +123,13 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        //Spacer(modifier = Modifier.height(16.dp))
 
         // Automatically trigger search when input matches one or more suggestions
-        LaunchedEffect(ingredient) {
-            val suggestions = ingredients.filter { it.equals(ingredient, ignoreCase = true) }
+        LaunchedEffect(ingredient.text) {
+            val suggestions = ingredients.filter { it.equals(ingredient.text, ignoreCase = true) }
             if (suggestions.isNotEmpty()) {
-                searchRecipes(ingredient) { result, error ->
+                searchRecipes(ingredient.text) { result, error ->
                     recipes = result
                     errorMessage = error
                 }
