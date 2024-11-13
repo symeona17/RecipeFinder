@@ -13,6 +13,8 @@ interface RecipeApiService {
     fun getRecipesByIngredient(@Query("i") ingredient: String): Call<RecipeResponse>
     @GET("list.php?i=list")
     fun getAllIngredients(): Call<IngredientResponse>
+    @GET("categories.php")
+    fun getMealCategories(): Call<CategoryResponse>
 }
 
 // Set up the Retrofit instance

@@ -65,5 +65,6 @@ dependencies {
     implementation(libs.androidx.material3) // For Material3
     implementation(libs.androidx.compose.ui) // Core Compose UI
     implementation(libs.androidx.compose.ui.text)
+    implementation(libs.androidx.compose.foundation)
 
 }

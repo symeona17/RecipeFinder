@@ -19,7 +19,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,19 +35,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
-
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.mutableIntStateOf
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,7 +62,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            RecipeSearch(ingredients = ingredients)
+            MainScreen(ingredients = ingredients)
         }
     }
 
@@ -82,12 +86,36 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = emptyList()) {
-    var ingredient by remember { mutableStateOf(TextFieldValue("")) }
-    var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val keyboardController = LocalSoftwareKeyboardController.current
+fun MainScreen(ingredients: List<String>) {
+    var selectedTab by remember { mutableIntStateOf(0) }
 
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    icon = { Icon(painter = painterResource(id = R.drawable.search), contentDescription = "Search") },
+                    label = { Text("Search") },
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 }
+                )
+                NavigationBarItem(
+                    icon = { Icon(painter = painterResource(id = R.drawable.sort), contentDescription = "Categories") },
+                    label = { Text("Categories") },
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 }
+                )
+            }
+        }
+    ) { innerPadding ->
+        when (selectedTab) {
+            0 -> RecipeSearch(modifier = Modifier.padding(innerPadding), ingredients = ingredients)
+            1 -> ShowAllScreen(modifier = Modifier.padding(innerPadding))
+        }
+    }
+}
+
+@Composable
+fun ShowAllScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -95,15 +123,35 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Input field for the ingredient with auto-completion
+        Text("Show all content goes here")
+    }
+}
+
+@Composable
+fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = emptyList()) {
+    var ingredient by remember { mutableStateOf(TextFieldValue("")) }
+    var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         OutlinedTextField(
             value = ingredient,
             onValueChange = { newIngredient ->
-                ingredient = newIngredient.copy(
-                    text = newIngredient.text.trim(),
-                    selection = TextRange(newIngredient.text.length) // Move cursor to the end
-                )
-                recipes = null // Clear previous results
+                if (ingredient.text != newIngredient.text) {
+                    ingredient = newIngredient.copy(
+                        text = newIngredient.text,
+                        selection = TextRange(newIngredient.text.length)
+                    )
+                    recipes = null
+                }
             },
             label = { Text("Enter an ingredient") },
             modifier = Modifier.fillMaxWidth(),
@@ -114,15 +162,17 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
                         contentDescription = "Clear text",
                         modifier = Modifier.clickable {
                             ingredient = TextFieldValue("")
+                            recipes = null
                         }
                     )
                 }
             }
         )
 
-        // Display auto-completion suggestions
+        Spacer(modifier = Modifier.height(16.dp))
+
+        val suggestions = ingredients.filter { it.contains(ingredient.text, ignoreCase = true) }
         if (ingredient.text.isNotEmpty()) {
-            val suggestions = ingredients.filter { it.contains(ingredient.text, ignoreCase = true) }
             LazyColumn {
                 items(suggestions) { suggestion ->
                     Text(
@@ -142,24 +192,23 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
             }
         }
 
-        //Spacer(modifier = Modifier.height(16.dp))
-
-        // Automatically trigger search when input matches one or more suggestions
         LaunchedEffect(ingredient.text) {
-            val suggestions = ingredients.filter { it.equals(ingredient.text, ignoreCase = true) }
-            if (suggestions.isNotEmpty()) {
+            val exactMatch = ingredients.any { it.equals(ingredient.text, ignoreCase = true) }
+            if (exactMatch) {
+                isLoading = true
                 searchRecipes(ingredient.text) { result, error ->
                     recipes = result
                     errorMessage = error
+                    isLoading = false
                 }
             }
         }
 
-        // Display error message if exists
-        if (errorMessage != null) {
+        if (isLoading) {
+            Text(text = "Loading...", color = Color.Gray)
+        } else if (errorMessage != null) {
             Text(text = errorMessage ?: "", color = Color.Red)
         } else {
-            // Display list of recipes if available
             LazyColumn(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -217,7 +266,6 @@ fun RecipeCard(recipe: Recipe) {
     }
 }
 
-// Function to call the API and handle the response
 private fun searchRecipes(
     ingredient: String,
     onResult: (List<Recipe>?, String?) -> Unit
@@ -241,10 +289,4 @@ private fun searchRecipes(
             onResult(null, "Network error: ${t.message}")
         }
     })
-}
-
-@Preview(showBackground = true)
-@Composable
-fun DefaultPreview() {
-    RecipeSearch()
 }
