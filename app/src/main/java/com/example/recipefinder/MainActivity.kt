@@ -58,14 +58,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             var ingredients by remember { mutableStateOf<List<String>>(emptyList()) }
+            var categories by remember { mutableStateOf<List<Category>?>(null) }
+
 
             LaunchedEffect(Unit) {
                 fetchAllIngredients { result ->
                     ingredients = result ?: emptyList()
                 }
+                fetchMealCategories { result ->
+                    categories = result
+                }
             }
 
-            MainScreen(ingredients = ingredients)
+            MainScreen(ingredients = ingredients, categories = categories)
         }
     }
 
@@ -86,10 +91,27 @@ class MainActivity : ComponentActivity() {
             }
         })
     }
+    private fun fetchMealCategories(onResult: (List<Category>?) -> Unit) {
+        val call = ApiClient.retrofitService.getMealCategories()
+        call.enqueue(object : Callback<CategoryResponse> {
+            override fun onResponse(call: Call<CategoryResponse>, response: Response<CategoryResponse>) {
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    onResult(body?.categories)
+                } else {
+                    onResult(null)
+                }
+            }
+
+            override fun onFailure(call: Call<CategoryResponse>, t: Throwable) {
+                onResult(null)
+            }
+        })
+    }
 }
 
 @Composable
-fun MainScreen(ingredients: List<String>) {
+fun MainScreen(ingredients: List<String>, categories: List<Category>?) {
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
@@ -112,21 +134,73 @@ fun MainScreen(ingredients: List<String>) {
     ) { innerPadding ->
         when (selectedTab) {
             0 -> RecipeSearch(modifier = Modifier.padding(innerPadding), ingredients = ingredients)
-            1 -> ShowAllScreen(modifier = Modifier.padding(innerPadding))
+            1 -> CategoriesScreen(modifier = Modifier.padding(innerPadding), categories = categories)
         }
     }
 }
 
 @Composable
-fun ShowAllScreen(modifier: Modifier = Modifier) {
+fun CategoriesScreen(modifier: Modifier = Modifier, categories: List<Category>?) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Show all content goes here")
+        if (categories == null) {
+            Text("Loading categories...", color = Color.Gray)
+        } else {
+            LazyColumn {
+                items(categories) { category ->
+                    CategoryCard(category = category)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryCard(category: Category) {
+    val context = LocalContext.current
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Load the image asynchronously using Coil
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(category.strCategoryThumb)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = category.strCategory,
+                modifier = Modifier
+                    .size(80.dp)
+                    .padding(end = 16.dp)
+                    .clip(RoundedCornerShape(50)),
+                contentScale = ContentScale.Crop
+            )
+
+            // Display the category name
+            Column {
+                Text(
+                    text = category.strCategory,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+            }
+        }
     }
 }
 
