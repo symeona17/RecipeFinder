@@ -49,6 +49,9 @@ import retrofit2.Response
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.Box
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,94 +130,108 @@ fun ShowAllScreen(modifier: Modifier = Modifier) {
     }
 }
 
+
 @Composable
 fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = emptyList()) {
     var ingredient by remember { mutableStateOf(TextFieldValue("")) }
     var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    keyboardController?.hide()
+                })
+            }
     ) {
-        OutlinedTextField(
-            value = ingredient,
-            onValueChange = { newIngredient ->
-                if (ingredient.text != newIngredient.text) {
-                    ingredient = newIngredient.copy(
-                        text = newIngredient.text,
-                        selection = TextRange(newIngredient.text.length)
-                    )
-                    recipes = null
-                }
-            },
-            label = { Text("Enter an ingredient") },
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                if (ingredient.text.isNotEmpty()) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.close),
-                        contentDescription = "Clear text",
-                        modifier = Modifier.clickable {
-                            ingredient = TextFieldValue("")
-                            recipes = null
-                        }
-                    )
-                }
-            }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        val suggestions = ingredients.filter { it.contains(ingredient.text, ignoreCase = true) }
-        if (ingredient.text.isNotEmpty()) {
-            LazyColumn {
-                items(suggestions) { suggestion ->
-                    Text(
-                        text = suggestion,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                ingredient = TextFieldValue(
-                                    text = suggestion,
-                                    selection = TextRange(suggestion.length, suggestion.length)
-                                )
-                                keyboardController?.hide()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            OutlinedTextField(
+                value = ingredient,
+                onValueChange = { newIngredient ->
+                    if (ingredient.text != newIngredient.text) {
+                        ingredient = newIngredient.copy(
+                            text = newIngredient.text.trim(),
+                            selection = TextRange(newIngredient.text.length)
+                        )
+                        recipes = null
+                        suggestions = ingredients.filter { it.contains(newIngredient.text, ignoreCase = true) }
+                    }
+                },
+                label = { Text("Enter an ingredient") },
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    if (ingredient.text.isNotEmpty()) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.close),
+                            contentDescription = "Clear text",
+                            modifier = Modifier.clickable {
+                                ingredient = TextFieldValue("")
+                                recipes = null
+                                suggestions = emptyList()
                             }
-                            .padding(8.dp)
-                    )
+                        )
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (ingredient.text.isNotEmpty()) {
+                LazyColumn {
+                    items(suggestions) { suggestion ->
+                        Text(
+                            text = suggestion,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    ingredient = TextFieldValue(
+                                        text = suggestion,
+                                        selection = TextRange(suggestion.length, suggestion.length)
+                                    )
+                                    keyboardController?.hide()
+                                    suggestions = emptyList()
+                                }
+                                .padding(8.dp)
+                        )
+                    }
                 }
             }
-        }
 
-        LaunchedEffect(ingredient.text) {
-            val exactMatch = ingredients.any { it.equals(ingredient.text, ignoreCase = true) }
-            if (exactMatch) {
-                isLoading = true
-                searchRecipes(ingredient.text) { result, error ->
-                    recipes = result
-                    errorMessage = error
-                    isLoading = false
+            LaunchedEffect(ingredient.text) {
+                val exactMatch = ingredients.any { it.equals(ingredient.text, ignoreCase = true) }
+                if (exactMatch) {
+                    isLoading = true
+                    searchRecipes(ingredient.text) { result, error ->
+                        recipes = result
+                        errorMessage = error
+                        isLoading = false
+                    }
                 }
             }
-        }
 
-        if (isLoading) {
-            Text(text = "Loading...", color = Color.Gray)
-        } else if (errorMessage != null) {
-            Text(text = errorMessage ?: "", color = Color.Red)
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                recipes?.let { recipeList ->
-                    items(recipeList) { recipe ->
-                        RecipeCard(recipe = recipe)
+            if (isLoading) {
+                Text(text = "Loading...", color = Color.Gray)
+            } else if (errorMessage != null) {
+                Text(text = errorMessage ?: "", color = Color.Red)
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    recipes?.let { recipeList ->
+                        items(recipeList) { recipe ->
+                            RecipeCard(recipe = recipe)
+                        }
                     }
                 }
             }
