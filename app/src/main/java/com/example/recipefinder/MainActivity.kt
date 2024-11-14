@@ -54,8 +54,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.Crossfade
 
-
 class MainActivity : ComponentActivity() {
+    private var isAppBackButtonVisible by mutableStateOf(false)
+    private var currentScreen by mutableStateOf("search")
+    private var categoryName by mutableStateOf<String?>(null)
+    private var mealId by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -71,7 +75,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            MainScreen(ingredients = ingredients, categories = categories)
+            MainScreen(
+                ingredients = ingredients,
+                categories = categories,
+                currentScreen = currentScreen,
+                categoryName = categoryName,
+                mealId = mealId,
+                onScreenChange = { screen, category, meal ->
+                    currentScreen = screen
+                    categoryName = category
+                    mealId = meal
+                    isAppBackButtonVisible = screen == "categoryRecipes" || screen == "recipeDetails"
+                }
+            )
         }
     }
 
@@ -113,10 +129,23 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(ingredients: List<String>, categories: List<Category>?) {
+fun MainScreen(
+    ingredients: List<String>,
+    categories: List<Category>?,
+    currentScreen: String,
+    categoryName: String?,
+    mealId: String?,
+    onScreenChange: (String, String?, String?) -> Unit
+) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    var currentScreen by remember { mutableStateOf("search") }
-    var categoryName by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(currentScreen) {
+        selectedTab = when (currentScreen) {
+            "search" -> 0
+            "categories", "categoryRecipes" -> 1
+            else -> 0
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -125,33 +154,104 @@ fun MainScreen(ingredients: List<String>, categories: List<Category>?) {
                     icon = { Icon(painter = painterResource(id = R.drawable.search), contentDescription = "Search") },
                     label = { Text("Search") },
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0; currentScreen = "search" }
+                    onClick = {
+                        selectedTab = 0
+                        onScreenChange("search", null, null)
+                    }
                 )
                 NavigationBarItem(
                     icon = { Icon(painter = painterResource(id = R.drawable.sort), contentDescription = "Categories") },
                     label = { Text("Categories") },
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1; currentScreen = "categories" }
+                    onClick = {
+                        selectedTab = 1
+                        onScreenChange("categories", null, null)
+                    }
                 )
             }
         }
     ) { innerPadding ->
         Crossfade(targetState = currentScreen, label = "Screen Crossfade") { screen ->
             when (screen) {
-                "search" -> RecipeSearch(modifier = Modifier.padding(innerPadding), ingredients = ingredients)
+                "search" -> RecipeSearch(
+                    modifier = Modifier.padding(innerPadding),
+                    ingredients = ingredients,
+                    onRecipeClick = { mealId ->
+                        onScreenChange("recipeDetails", null, mealId)
+                    }
+                )
                 "categories" -> CategoriesScreen(
                     modifier = Modifier.padding(innerPadding),
                     categories = categories,
                     onCategoryClick = { category ->
-                        categoryName = category.strCategory
-                        currentScreen = "categoryRecipes"
+                        selectedTab = 1
+                        onScreenChange("categoryRecipes", category.strCategory, null)
                     }
                 )
                 "categoryRecipes" -> CategoryRecipesScreen(
                     categoryName = categoryName ?: "",
-                    onBackClick = { currentScreen = "categories" }
+                    onBackClick = {
+                        selectedTab = 1
+                        onScreenChange("categories", null, null)
+                    },
+                    onRecipeClick = { mealId ->
+                        onScreenChange("recipeDetails", null, mealId)
+                    }
+                )
+                "recipeDetails" -> RecipeDetailsScreen(
+                    mealId = mealId ?: "",
+                    onBackClick = {
+                        onScreenChange("categoryRecipes", categoryName, null)
+                    }
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
+    var recipe by remember { mutableStateOf<Recipe?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(mealId) {
+        fetchRecipeDetails(mealId) { result, error ->
+            recipe = result
+            errorMessage = error
+            isLoading = false
+        }
+    }
+
+    Column {
+        Icon(
+            painter = painterResource(id = R.drawable.arrow_back),
+            contentDescription = "Back",
+            modifier = Modifier
+                .padding(16.dp)
+                .clickable { onBackClick() }
+        )
+        if (isLoading) {
+            Text(text = "Loading...", color = Color.Gray, modifier = Modifier.padding(16.dp))
+        } else if (errorMessage != null) {
+            Text(text = errorMessage ?: "", color = Color.Red, modifier = Modifier.padding(16.dp))
+        } else {
+            recipe?.let {
+                Text(text = it.strMeal, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
+                AsyncImage(
+                    model = it.strMealThumb,
+                    contentDescription = it.strMeal,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Text(
+                    text = "Loading...",
+                    color = Color.Gray,
+                    modifier = Modifier.padding(16.dp)
+                )            }
         }
     }
 }
@@ -220,7 +320,11 @@ fun CategoryCard(category: Category, onClick: () -> Unit) {
 }
 
 @Composable
-fun CategoryRecipesScreen(categoryName: String, onBackClick: () -> Unit) {
+fun CategoryRecipesScreen(
+    categoryName: String,
+    onBackClick: () -> Unit,
+    onRecipeClick: (String) -> Unit
+) {
     var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -254,7 +358,7 @@ fun CategoryRecipesScreen(categoryName: String, onBackClick: () -> Unit) {
             LazyColumn(modifier = Modifier.padding(16.dp)) {
                 recipes?.let { recipeList ->
                     items(recipeList) { recipe ->
-                        RecipeCard(recipe = recipe)
+                        RecipeCard(recipe = recipe, onClick = { onRecipeClick(recipe.idMeal) })
                     }
                 }
             }
@@ -285,7 +389,11 @@ private fun fetchRecipesByCategory(category: String, onResult: (List<Recipe>?, S
 }
 
 @Composable
-fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = emptyList()) {
+fun RecipeSearch(
+    modifier: Modifier = Modifier,
+    ingredients: List<String> = emptyList(),
+    onRecipeClick: (String) -> Unit
+) {
     var ingredient by remember { mutableStateOf(TextFieldValue("")) }
     var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -383,7 +491,7 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
                 ) {
                     recipes?.let { recipeList ->
                         items(recipeList) { recipe ->
-                            RecipeCard(recipe = recipe)
+                            RecipeCard(recipe = recipe, onClick = { onRecipeClick(recipe.idMeal) })
                         }
                     }
                 }
@@ -392,14 +500,38 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
     }
 }
 
+
+private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> Unit) {
+    val call = ApiClient.retrofitService.getRecipeDetails(mealId)
+    call.enqueue(object : Callback<RecipeResponse> {
+        override fun onResponse(call: Call<RecipeResponse>, response: Response<RecipeResponse>) {
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body?.meals != null && body.meals.isNotEmpty()) {
+                    onResult(body.meals[0], null)
+                } else {
+                    onResult(null, "No recipe found.")
+                }
+            } else {
+                onResult(null, "Failed to fetch recipe details: ${response.message()}")
+            }
+        }
+
+        override fun onFailure(call: Call<RecipeResponse>, t: Throwable) {
+            onResult(null, "Network error: ${t.message}")
+        }
+    })
+}
+
 @Composable
-fun RecipeCard(recipe: Recipe) {
+fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
     val context = LocalContext.current
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(8.dp)
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
