@@ -52,7 +52,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
-import androidx.navigation.compose.rememberNavController
 import androidx.compose.animation.Crossfade
 
 
