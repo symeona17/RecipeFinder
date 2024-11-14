@@ -15,6 +15,8 @@ interface RecipeApiService {
     fun getAllIngredients(): Call<IngredientResponse>
     @GET("categories.php")
     fun getMealCategories(): Call<CategoryResponse>
+    @GET("filter.php")
+    fun getRecipesByCategory(@Query("c") category: String): Call<RecipeResponse>
 }
 
 // Set up the Retrofit instance

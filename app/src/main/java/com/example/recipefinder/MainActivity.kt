@@ -52,6 +52,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
+import androidx.navigation.compose.rememberNavController
+import androidx.compose.animation.Crossfade
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,7 +62,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             var ingredients by remember { mutableStateOf<List<String>>(emptyList()) }
             var categories by remember { mutableStateOf<List<Category>?>(null) }
-
 
             LaunchedEffect(Unit) {
                 fetchAllIngredients { result ->
@@ -91,6 +93,7 @@ class MainActivity : ComponentActivity() {
             }
         })
     }
+
     private fun fetchMealCategories(onResult: (List<Category>?) -> Unit) {
         val call = ApiClient.retrofitService.getMealCategories()
         call.enqueue(object : Callback<CategoryResponse> {
@@ -113,6 +116,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(ingredients: List<String>, categories: List<Category>?) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var currentScreen by remember { mutableStateOf("search") }
+    var categoryName by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         bottomBar = {
@@ -121,26 +126,39 @@ fun MainScreen(ingredients: List<String>, categories: List<Category>?) {
                     icon = { Icon(painter = painterResource(id = R.drawable.search), contentDescription = "Search") },
                     label = { Text("Search") },
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 }
+                    onClick = { selectedTab = 0; currentScreen = "search" }
                 )
                 NavigationBarItem(
                     icon = { Icon(painter = painterResource(id = R.drawable.sort), contentDescription = "Categories") },
                     label = { Text("Categories") },
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 }
+                    onClick = { selectedTab = 1; currentScreen = "categories" }
                 )
             }
         }
     ) { innerPadding ->
-        when (selectedTab) {
-            0 -> RecipeSearch(modifier = Modifier.padding(innerPadding), ingredients = ingredients)
-            1 -> CategoriesScreen(modifier = Modifier.padding(innerPadding), categories = categories)
+        Crossfade(targetState = currentScreen, label = "Screen Crossfade") { screen ->
+            when (screen) {
+                "search" -> RecipeSearch(modifier = Modifier.padding(innerPadding), ingredients = ingredients)
+                "categories" -> CategoriesScreen(
+                    modifier = Modifier.padding(innerPadding),
+                    categories = categories,
+                    onCategoryClick = { category ->
+                        categoryName = category.strCategory
+                        currentScreen = "categoryRecipes"
+                    }
+                )
+                "categoryRecipes" -> CategoryRecipesScreen(
+                    categoryName = categoryName ?: "",
+                    onBackClick = { currentScreen = "categories" }
+                )
+            }
         }
     }
 }
 
 @Composable
-fun CategoriesScreen(modifier: Modifier = Modifier, categories: List<Category>?) {
+fun CategoriesScreen(modifier: Modifier = Modifier, categories: List<Category>?, onCategoryClick: (Category) -> Unit) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -153,7 +171,7 @@ fun CategoriesScreen(modifier: Modifier = Modifier, categories: List<Category>?)
         } else {
             LazyColumn {
                 items(categories) { category ->
-                    CategoryCard(category = category)
+                    CategoryCard(category = category, onClick = { onCategoryClick(category) })
                 }
             }
         }
@@ -161,13 +179,14 @@ fun CategoriesScreen(modifier: Modifier = Modifier, categories: List<Category>?)
 }
 
 @Composable
-fun CategoryCard(category: Category) {
+fun CategoryCard(category: Category, onClick: () -> Unit) {
     val context = LocalContext.current
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(8.dp)
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
@@ -177,7 +196,6 @@ fun CategoryCard(category: Category) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Load the image asynchronously using Coil
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(category.strCategoryThumb)
@@ -190,8 +208,6 @@ fun CategoryCard(category: Category) {
                     .clip(RoundedCornerShape(50)),
                 contentScale = ContentScale.Crop
             )
-
-            // Display the category name
             Column {
                 Text(
                     text = category.strCategory,
@@ -204,6 +220,70 @@ fun CategoryCard(category: Category) {
     }
 }
 
+@Composable
+fun CategoryRecipesScreen(categoryName: String, onBackClick: () -> Unit) {
+    var recipes by remember { mutableStateOf<List<Recipe>?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(categoryName) {
+        fetchRecipesByCategory(categoryName) { result, error ->
+            recipes = result
+            errorMessage = error
+            isLoading = false
+        }
+    }
+
+    Column {
+        Icon(
+            painter = painterResource(id = R.drawable.arrow_back),
+            contentDescription = "Back",
+            modifier = Modifier
+                .padding(16.dp)
+                .clickable { onBackClick() }
+        )
+        Text(
+            text = "Recipes for $categoryName",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(16.dp)
+        )
+        if (isLoading) {
+            Text(text = "Loading...", color = Color.Gray, modifier = Modifier.padding(16.dp))
+        } else if (errorMessage != null) {
+            Text(text = errorMessage ?: "", color = Color.Red, modifier = Modifier.padding(16.dp))
+        } else {
+            LazyColumn(modifier = Modifier.padding(16.dp)) {
+                recipes?.let { recipeList ->
+                    items(recipeList) { recipe ->
+                        RecipeCard(recipe = recipe)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun fetchRecipesByCategory(category: String, onResult: (List<Recipe>?, String?) -> Unit) {
+    val call = ApiClient.retrofitService.getRecipesByCategory(category)
+    call.enqueue(object : Callback<RecipeResponse> {
+        override fun onResponse(call: Call<RecipeResponse>, response: Response<RecipeResponse>) {
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body?.meals != null) {
+                    onResult(body.meals, null)
+                } else {
+                    onResult(null, "No recipes found.")
+                }
+            } else {
+                onResult(null, "Failed to fetch recipes: ${response.message()}")
+            }
+        }
+
+        override fun onFailure(call: Call<RecipeResponse>, t: Throwable) {
+            onResult(null, "Network error: ${t.message}")
+        }
+    })
+}
 
 @Composable
 fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = emptyList()) {
@@ -235,7 +315,7 @@ fun RecipeSearch(modifier: Modifier = Modifier, ingredients: List<String> = empt
                 onValueChange = { newIngredient ->
                     if (ingredient.text != newIngredient.text) {
                         ingredient = newIngredient.copy(
-                            text = newIngredient.text.trim(),
+                            text = newIngredient.text,
                             selection = TextRange(newIngredient.text.length)
                         )
                         recipes = null
@@ -330,7 +410,6 @@ fun RecipeCard(recipe: Recipe) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Load the image asynchronously using Coil
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(recipe.strMealThumb)
@@ -343,8 +422,6 @@ fun RecipeCard(recipe: Recipe) {
                     .clip(RoundedCornerShape(50)),
                 contentScale = ContentScale.Crop
             )
-
-            // Display the recipe name
             Column {
                 Text(
                     text = recipe.strMeal,

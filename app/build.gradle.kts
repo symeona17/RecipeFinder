@@ -60,11 +60,15 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.retrofit)
     implementation(libs.converter.gson)
-    implementation(libs.coil.kt.coil.compose) // Coil for Compose
-    implementation(libs.coil) // Core Coil library for image loading
-    implementation(libs.androidx.material3) // For Material3
-    implementation(libs.androidx.compose.ui) // Core Compose UI
+    implementation(libs.coil.kt.coil.compose)
+    implementation(libs.coil)
+    implementation(libs.androidx.material3)
     implementation(libs.androidx.compose.ui.text)
-    implementation(libs.androidx.compose.foundation)
-
+    implementation(libs.androidx.compose.foundation) // Use foundation library
+    implementation(libs.compose.material)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.compose.animation)
 }
