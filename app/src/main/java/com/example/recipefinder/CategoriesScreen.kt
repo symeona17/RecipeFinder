@@ -22,6 +22,7 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
+//Main screen for displaying categories
 @Composable
 fun CategoriesScreen(
     modifier: Modifier = Modifier,
@@ -47,6 +48,7 @@ fun CategoriesScreen(
     }
 }
 
+//The code to display the loaded category cards to be clicked on & navigated to recipes belonging in that category
 @Composable
 fun CategoryCard(category: Category, onClick: () -> Unit) {
     val context = LocalContext.current
@@ -89,6 +91,7 @@ fun CategoryCard(category: Category, onClick: () -> Unit) {
     }
 }
 
+//The code to display the recipes belonging to a category
 @Composable
 fun CategoryRecipesScreen(
     categoryName: String,
@@ -136,6 +139,7 @@ fun CategoryRecipesScreen(
     }
 }
 
+//The code to fetch recipes by category from the API
 private fun fetchRecipesByCategory(category: String, onResult: (List<Recipe>?, String?) -> Unit) {
     val call = ApiClient.retrofitService.getRecipesByCategory(category)
     call.enqueue(object : Callback<RecipeResponse> {
@@ -144,8 +148,6 @@ private fun fetchRecipesByCategory(category: String, onResult: (List<Recipe>?, S
                 val body = response.body()
                 if (body?.meals != null) {
                     onResult(body.meals, null)
-                } else {
-                    onResult(null, "No recipes found.")
                 }
             } else {
                 onResult(null, "Failed to fetch recipes: ${response.message()}")

@@ -32,7 +32,8 @@ data class Recipe(
     val strIngredient18: String?,
     val strIngredient19: String?,
     val strIngredient20: String?,
-    var ingredients: List<String> = emptyList()
+    var ingredients: List<String> = emptyList(),
+    val strYoutube: String?
 )
 
 data class IngredientResponse(

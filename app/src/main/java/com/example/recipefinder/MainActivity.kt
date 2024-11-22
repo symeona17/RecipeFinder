@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -27,6 +26,9 @@ import androidx.compose.animation.Crossfade
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import android.content.Intent
+import android.net.Uri
+
 
 class MainActivity : ComponentActivity() {
     private var isAppBackButtonVisible by mutableStateOf(false)
@@ -74,7 +76,7 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-
+    //Loads a list of all the ingredients from the API to assist searching & auto-completion
     private fun fetchAllIngredients(onResult: (List<String>?) -> Unit) {
         val call = ApiClient.retrofitService.getAllIngredients()
         call.enqueue(object : Callback<IngredientResponse> {
@@ -92,7 +94,7 @@ class MainActivity : ComponentActivity() {
             }
         })
     }
-
+    //Loads all the meal categories from the API for the categories tab
     private fun fetchMealCategories(onResult: (List<Category>?) -> Unit) {
         val call = ApiClient.retrofitService.getMealCategories()
         call.enqueue(object : Callback<CategoryResponse> {
@@ -112,6 +114,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+//Acts as the navigator between the different screens
 @Composable
 fun MainScreen(
     ingredients: List<String>,
@@ -126,6 +129,7 @@ fun MainScreen(
         selectedTab = when (currentScreen) {
             "search" -> 0
             "categories", "categoryRecipes" -> 1
+            "recipeDetails" -> -1
             else -> 0
         }
     }
@@ -204,17 +208,21 @@ fun MainScreen(
     }
 }
 
+//Code to create a screen which wil host the recipe details
 @Composable
 fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
     var recipe by remember { mutableStateOf<Recipe?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isDataLoaded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     LaunchedEffect(mealId) {
         fetchRecipeDetails(mealId) { result, error ->
             recipe = result
             errorMessage = error
             isLoading = false
+            isDataLoaded = true
         }
     }
 
@@ -228,8 +236,6 @@ fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
         )
         if (isLoading) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-        } else if (errorMessage != null) {
-            Text(text = "Error: $errorMessage", color = Color.Red, modifier = Modifier.align(Alignment.CenterHorizontally))
         } else {
             recipe?.let {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -255,6 +261,24 @@ fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
                         it.strTags?.let { tags ->
                             Text(text = "Tags: $tags", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        if (!it.strYoutube.isNullOrBlank()) {
+                            Text(text = "Video", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
+                            AsyncImage(
+                                model = "https://img.youtube.com/vi/${it.strYoutube.split("=").last()}/0.jpg",
+                                contentDescription = "YouTube Thumbnail",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .padding(top = 8.dp)
+                                    .clickable {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.strYoutube))
+                                        context.startActivity(intent)
+                                    }
+                                    .clip(RoundedCornerShape(16.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                         Spacer(modifier = Modifier.height(100.dp))
                     }
                 }
@@ -263,6 +287,7 @@ fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
     }
 }
 
+//Fetches the recipe details from the API
 private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> Unit) {
     val call = ApiClient.retrofitService.getRecipeDetails(mealId)
     call.enqueue(object : Callback<RecipeResponse> {
@@ -295,8 +320,6 @@ private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> U
                             recipe.strIngredient20
                         ).filter { it.isNotBlank() }
                         onResult(recipe, null)
-                    } else {
-                        onResult(null, "No recipe found.")
                     }
                 } catch (e: Exception) {
                     onResult(null, "Failed to parse recipe details: ${e.message}")
@@ -312,6 +335,7 @@ private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> U
     })
 }
 
+//Creates the recipe card to click on to view the recipes
 @Composable
 fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
     val context = LocalContext.current

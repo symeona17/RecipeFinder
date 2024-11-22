@@ -8,20 +8,24 @@ import retrofit2.Call
 
 // Define the API service interface
 interface RecipeApiService {
-    // Update endpoint to filter by ingredient
+    // Load recipes based on ingredient
     @GET("filter.php")
     fun getRecipesByIngredient(@Query("i") ingredient: String): Call<RecipeResponse>
+    // Load all ingredients (for search suggestions)
     @GET("list.php?i=list")
     fun getAllIngredients(): Call<IngredientResponse>
+    // Load all meal categories (for recipe categories)
     @GET("categories.php")
     fun getMealCategories(): Call<CategoryResponse>
+    // Load recipes based on category
     @GET("filter.php")
     fun getRecipesByCategory(@Query("c") category: String): Call<RecipeResponse>
+    //Load recipe details based on meal ID
     @GET("lookup.php")
     fun getRecipeDetails(@Query("i") mealId: String): Call<RecipeResponse>
 }
 
-// Set up the Retrofit instance
+// Connecting to the API
 object ApiClient {
     private const val BASE_URL = "https://www.themealdb.com/api/json/v1/1/"
 
