@@ -9,8 +9,10 @@ data class RecipeResponse(
 data class Recipe(
     val idMeal: String,
     val strMeal: String,
-    val strInstructions: String?,
-    val strMealThumb: String
+    val strMealThumb: String,
+    val strInstructions: String,
+    val strTags: String?,
+    val ingredients: List<String>,
 )
 
 data class IngredientResponse(

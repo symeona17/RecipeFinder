@@ -27,6 +27,8 @@ import androidx.compose.runtime.mutableIntStateOf
 
 import androidx.compose.animation.Crossfade
 
+import androidx.activity.OnBackPressedCallback
+
 class MainActivity : ComponentActivity() {
     private var isAppBackButtonVisible by mutableStateOf(false)
     private var currentScreen by mutableStateOf("search")
@@ -35,6 +37,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (currentScreen != "search") {
+                    currentScreen = "search"
+                    isAppBackButtonVisible = false
+                } else {
+                    finish()
+                }
+            }
+        })
         setContent {
             var ingredients by remember { mutableStateOf<List<String>>(emptyList()) }
             var categories by remember { mutableStateOf<List<Category>?>(null) }
@@ -163,8 +175,7 @@ fun MainScreen(
                 "categoryRecipes" -> CategoryRecipesScreen(
                     categoryName = categoryName ?: "",
                     onBackClick = {
-                        selectedTab = 1
-                        onScreenChange("categories", null, null)
+                        onScreenChange("search", null, null)
                     },
                     onRecipeClick = { mealId ->
                         onScreenChange("recipeDetails", null, mealId)
@@ -173,7 +184,7 @@ fun MainScreen(
                 "recipeDetails" -> RecipeDetailsScreen(
                     mealId = mealId ?: "",
                     onBackClick = {
-                        onScreenChange("categoryRecipes", categoryName, null)
+                        onScreenChange("search", null, null)
                     }
                 )
             }
@@ -185,12 +196,10 @@ fun MainScreen(
 fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
     var recipe by remember { mutableStateOf<Recipe?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(mealId) {
-        fetchRecipeDetails(mealId) { result, error ->
+        fetchRecipeDetails(mealId) { result, _ ->
             recipe = result
-            errorMessage = error
             isLoading = false
         }
     }
@@ -205,8 +214,6 @@ fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
         )
         if (isLoading) {
             Text(text = "Loading...", color = Color.Gray, modifier = Modifier.padding(16.dp))
-        } else if (errorMessage != null) {
-            Text(text = errorMessage ?: "", color = Color.Red, modifier = Modifier.padding(16.dp))
         } else {
             recipe?.let {
                 Text(text = it.strMeal, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
@@ -214,16 +221,12 @@ fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
                     model = it.strMealThumb,
                     contentDescription = it.strMeal,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .size(150.dp) // Adjust the size here
                         .padding(16.dp)
                         .clip(RoundedCornerShape(16.dp)),
                     contentScale = ContentScale.Crop
                 )
-                Text(
-                    text = "Loading...",
-                    color = Color.Gray,
-                    modifier = Modifier.padding(16.dp)
-                )            }
+            }
         }
     }
 }
@@ -234,10 +237,14 @@ private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> U
         override fun onResponse(call: Call<RecipeResponse>, response: Response<RecipeResponse>) {
             if (response.isSuccessful) {
                 val body = response.body()
-                if (body?.meals != null && body.meals.isNotEmpty()) {
-                    onResult(body.meals[0], null)
-                } else {
-                    onResult(null, "No recipe found.")
+                try {
+                    if (body?.meals != null && body.meals.isNotEmpty()) {
+                        onResult(body.meals[0], null)
+                    } else {
+                        onResult(null, "No recipe found.")
+                    }
+                } catch (e: Exception) {
+                    onResult(null, "Failed to parse recipe details: ${e.message}")
                 }
             } else {
                 onResult(null, "Failed to fetch recipe details: ${response.message()}")
@@ -249,7 +256,6 @@ private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> U
         }
     })
 }
-
 @Composable
 fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
     val context = LocalContext.current
