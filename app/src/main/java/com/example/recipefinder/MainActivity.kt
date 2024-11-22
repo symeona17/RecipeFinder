@@ -23,10 +23,12 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import androidx.compose.runtime.mutableIntStateOf
-
 import androidx.compose.animation.Crossfade
-
 import androidx.activity.OnBackPressedCallback
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 
 class MainActivity : ComponentActivity() {
     private var isAppBackButtonVisible by mutableStateOf(false)
@@ -134,7 +136,12 @@ fun MainScreen(
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
-                    icon = { Icon(painter = painterResource(id = R.drawable.search), contentDescription = "Search") },
+                    icon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.search),
+                            contentDescription = "Search"
+                        )
+                    },
                     label = { Text("Search") },
                     selected = selectedTab == 0,
                     onClick = {
@@ -143,7 +150,12 @@ fun MainScreen(
                     }
                 )
                 NavigationBarItem(
-                    icon = { Icon(painter = painterResource(id = R.drawable.sort), contentDescription = "Categories") },
+                    icon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.sort),
+                            contentDescription = "Categories"
+                        )
+                    },
                     label = { Text("Categories") },
                     selected = selectedTab == 1,
                     onClick = {
@@ -163,6 +175,7 @@ fun MainScreen(
                         onScreenChange("recipeDetails", null, mealId)
                     }
                 )
+
                 "categories" -> CategoriesScreen(
                     modifier = Modifier.padding(innerPadding),
                     categories = categories,
@@ -171,6 +184,7 @@ fun MainScreen(
                         onScreenChange("categoryRecipes", category.strCategory, null)
                     }
                 )
+
                 "categoryRecipes" -> CategoryRecipesScreen(
                     categoryName = categoryName ?: "",
                     onBackClick = {
@@ -180,6 +194,7 @@ fun MainScreen(
                         onScreenChange("recipeDetails", null, mealId)
                     }
                 )
+
                 "recipeDetails" -> RecipeDetailsScreen(
                     mealId = mealId ?: "",
                     onBackClick = {
@@ -195,15 +210,17 @@ fun MainScreen(
 fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
     var recipe by remember { mutableStateOf<Recipe?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(mealId) {
-        fetchRecipeDetails(mealId) { result, _ ->
+        fetchRecipeDetails(mealId) { result, error ->
             recipe = result
+            errorMessage = error
             isLoading = false
         }
     }
 
-    Column {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Icon(
             painter = painterResource(id = R.drawable.arrow_back),
             contentDescription = "Back",
@@ -212,19 +229,37 @@ fun RecipeDetailsScreen(mealId: String, onBackClick: () -> Unit) {
                 .clickable { onBackClick() }
         )
         if (isLoading) {
-            Text(text = "Loading...", color = Color.Gray, modifier = Modifier.padding(16.dp))
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+        } else if (errorMessage != null) {
+            Text(text = "Error: $errorMessage", color = Color.Red, modifier = Modifier.align(Alignment.CenterHorizontally))
         } else {
             recipe?.let {
-                Text(text = it.strMeal, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
-                AsyncImage(
-                    model = it.strMealThumb,
-                    contentDescription = it.strMeal,
-                    modifier = Modifier
-                        .size(150.dp) // Adjust the size here
-                        .padding(16.dp)
-                        .clip(RoundedCornerShape(16.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    item {
+                        Text(text = it.strMeal, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
+                        AsyncImage(
+                            model = it.strMealThumb,
+                            contentDescription = it.strMeal,
+                            modifier = Modifier
+                                .size(150.dp)
+                                .padding(16.dp)
+                                .clip(RoundedCornerShape(16.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Text(text = "Ingredients", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
+                    }
+                    items(it.ingredients) { ingredient ->
+                        Text(text = ingredient, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    item {
+                        Text(text = "Instructions", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
+                        Text(text = it.strInstructions, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                        it.strTags?.let { tags ->
+                            Text(text = "Tags: $tags", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                        }
+                        Spacer(modifier = Modifier.height(100.dp))
+                    }
+                }
             }
         }
     }
@@ -238,7 +273,30 @@ private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> U
                 val body = response.body()
                 try {
                     if (body?.meals != null && body.meals.isNotEmpty()) {
-                        onResult(body.meals[0], null)
+                        val recipe = body.meals[0]
+                        recipe.ingredients = listOfNotNull(
+                            recipe.strIngredient1,
+                            recipe.strIngredient2,
+                            recipe.strIngredient3,
+                            recipe.strIngredient4,
+                            recipe.strIngredient5,
+                            recipe.strIngredient6,
+                            recipe.strIngredient7,
+                            recipe.strIngredient8,
+                            recipe.strIngredient9,
+                            recipe.strIngredient10,
+                            recipe.strIngredient11,
+                            recipe.strIngredient12,
+                            recipe.strIngredient13,
+                            recipe.strIngredient14,
+                            recipe.strIngredient15,
+                            recipe.strIngredient16,
+                            recipe.strIngredient17,
+                            recipe.strIngredient18,
+                            recipe.strIngredient19,
+                            recipe.strIngredient20
+                        ).filter { it.isNotBlank() }
+                        onResult(recipe, null)
                     } else {
                         onResult(null, "No recipe found.")
                     }
@@ -255,6 +313,7 @@ private fun fetchRecipeDetails(mealId: String, onResult: (Recipe?, String?) -> U
         }
     })
 }
+
 @Composable
 fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
     val context = LocalContext.current
